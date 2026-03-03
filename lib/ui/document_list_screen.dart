@@ -7,6 +7,7 @@ import '../models/document_model.dart';
 import '../repositories/document_repository.dart';
 import '../services/ocr_service.dart';
 import 'chat_screen.dart';
+import 'json_viewer_screen.dart';
 
 class DocumentListScreen extends StatefulWidget {
   @override
@@ -33,7 +34,10 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
     print("================== SLM TEST START ==================");
     print("Testing bundled model extraction from rootBundle...");
     try {
-      final res = await _ocrService.extractJsonContext("Mock OCR Document Text: Invoice ID: 59392, Total Amount: \$250.00, Date: 2023-10-25");
+      final res = await _ocrService.extractJsonContext(
+        "Mock OCR Document Text: Invoice ID: 59392, Total Amount: \$250.00, Date: 2023-10-25",
+        "mock_path.json",
+      );
       print("================== SLM TEST OUTPUT ==================");
       print(res);
       print("================== SLM TEST END ==================");
@@ -73,17 +77,10 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
       final ocrResult = await _ocrService.extractText(imageFile);
       
       setState(() {
-        _processingStatus = "Running SLM to extract JSON data (This may take a minute based on your device)...";
+        _processingStatus = "Saving Document space...";
       });
 
-      // 2. Feed text to SLM, get JSON string
-      final jsonContext = await _ocrService.extractJsonContext(ocrResult.text);
-
-      setState(() {
-        _processingStatus = "Saving Document Local Data...";
-      });
-
-      // 3. Save Image & JSON Locally
+      // 2 & 3. Make Document Space and save raw JSON natively
       final dir = await getApplicationDocumentsDirectory();
       final docId = DateTime.now().millisecondsSinceEpoch.toString();
       
@@ -91,27 +88,17 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
       await imageFile.copy(localImagePath);
 
       final localJsonPath = '${dir.path}/data_$docId.json';
-      final jsonFile = File(localJsonPath);
-      await jsonFile.writeAsString(jsonContext);
 
-      // Extract a better title from the JSON if available
-      String documentTitle = "Scan $docId";
-      try {
-        final jsonData = jsonDecode(jsonContext);
-        if (jsonData is Map && jsonData.containsKey('summary')) {
-          documentTitle = jsonData['summary'].toString().substring(0, 50);
-          if (jsonData['summary'].toString().length > 50) {
-            documentTitle += '...';
-          }
-        }
-      } catch (_) {
-        // Fallback to default title if JSON parsing fails
-      }
+      // Instantly save RAW text as a placeholder into the JSON file
+      final rawData = jsonEncode({
+         "raw_text": ocrResult.text 
+      });
+      await File(localJsonPath).writeAsString(rawData);
 
       // Create model
       final newDoc = Document(
         id: docId,
-        title: documentTitle,
+        title: "Scan $docId",
         imagePath: localImagePath,
         jsonPath: localJsonPath,
         createdAt: DateTime.now(),
@@ -277,6 +264,10 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                                   trailing: PopupMenuButton(
                                     itemBuilder: (context) => [
                                       PopupMenuItem(
+                                        child: Text('View Extracted Data'),
+                                        value: 'view_data',
+                                      ),
+                                      PopupMenuItem(
                                         child: Text('Rename'),
                                         value: 'rename',
                                       ),
@@ -289,7 +280,16 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                                       ),
                                     ],
                                     onSelected: (value) {
-                                      if (value == 'rename') {
+                                      if (value == 'view_data') {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => JsonViewerScreen(
+                                              document: document,
+                                            ),
+                                          ),
+                                        );
+                                      } else if (value == 'rename') {
                                         _renameDocument(document);
                                       } else if (value == 'delete') {
                                         _deleteDocument(document.id);

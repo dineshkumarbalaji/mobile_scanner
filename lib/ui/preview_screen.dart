@@ -44,13 +44,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
       });
       final ocrResult = await _ocrService.extractText(imageFile);
 
-      // 2. Extract JSON context using SLM
-      setState(() {
-        _processingStatus = "Extracting structured data...";
-      });
-      final jsonContext = await _ocrService.extractJsonContext(ocrResult.text);
-
-      // 3. Save document locally
+      // 2. Extract JSON context using SLM & 3. Save document locally
       setState(() {
         _processingStatus = "Saving document...";
       });
@@ -62,26 +56,17 @@ class _PreviewScreenState extends State<PreviewScreen> {
       await imageFile.copy(localImagePath);
 
       final localJsonPath = '${dir.path}/data_$docId.json';
-      await File(localJsonPath).writeAsString(jsonContext);
 
-      // Extract a better title from the JSON if available
-      String documentTitle = "Scan $docId";
-      try {
-        final jsonData = convert.jsonDecode(jsonContext);
-        if (jsonData is Map && jsonData.containsKey('summary')) {
-          documentTitle = jsonData['summary'].toString().substring(0, 50);
-          if (jsonData['summary'].toString().length > 50) {
-            documentTitle += '...';
-          }
-        }
-      } catch (_) {
-        // Fallback to default title if JSON parsing fails
-      }
+      // Instantly save RAW text as a placeholder into the JSON file
+      final rawData = jsonEncode({
+         "raw_text": ocrResult.text 
+      });
+      await File(localJsonPath).writeAsString(rawData);
 
       // Create and save document model
       final newDoc = Document(
         id: docId,
-        title: documentTitle,
+        title: "Scan $docId",
         imagePath: localImagePath,
         jsonPath: localJsonPath,
         createdAt: DateTime.now(),
@@ -89,16 +74,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
       await _repository.saveDocument(newDoc);
 
-      // Navigate to result screen
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => ResultScreen(
-            ocrResult: ocrResult,
-            document: newDoc,
-          ),
-        ),
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Document processed and saved successfully")),
       );
+
+      // Navigate back to the home/list screen instead of result screen
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       setState(() {
         _processingStatus = "Error: $e";

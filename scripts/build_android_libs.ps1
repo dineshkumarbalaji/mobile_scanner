@@ -3,7 +3,7 @@
 
 param(
     [string]$NdKPath = $env:ANDROID_NDK_HOME,
-    [string[]]$Abis = @('arm64-v8a','x86_64','armeabi-v7a')
+    [string[]]$Abis = @('arm64-v8a', 'x86_64', 'armeabi-v7a')
 )
 
 if (-not $NdKPath) {
@@ -13,8 +13,9 @@ if (-not $NdKPath) {
 
 $abis = $Abis
 Write-Host "Requested ABIs: $($abis -join ', ')"
-$llamaSrc = Join-Path (Get-Location) 'packages/llama_cpp_dart/src/llama.cpp'
-$jniRoot = Join-Path (Get-Location) 'android/app/src/main/jniLibs'
+$ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path
+$llamaSrc = Join-Path $ProjectRoot 'packages/llama_cpp_dart/src/llama.cpp'
+$jniRoot = Join-Path $ProjectRoot 'android/app/src/main/jniLibs'
 
 Write-Host "Using NDK at $NdKPath"
 Write-Host "LLAMA source: $llamaSrc"
@@ -22,7 +23,7 @@ Write-Host "Building for ABIs: $($abis -join ', ')"
 
 foreach ($abi in $abis) {
     Write-Host "`n=== Building $abi ==="
-    $buildDir = Join-Path (Get-Location) "packages/llama_cpp_dart/build-android/$abi"    # start fresh to avoid cached CMake variables from previous attempts
+    $buildDir = Join-Path $ProjectRoot "packages/llama_cpp_dart/build-android/$abi"    # start fresh to avoid cached CMake variables from previous attempts
     if (Test-Path $buildDir) {
         Remove-Item -Recurse -Force $buildDir
     }    New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
@@ -61,7 +62,10 @@ foreach ($abi in $abis) {
         Copy-Item -Path $_.FullName -Destination $targetDir -ErrorAction SilentlyContinue
     }
     # also pull the matching libomp from the NDK (necessary for OpenMP support)
-    $clangLibDir = Join-Path $NdKPath "toolchains/llvm/prebuilt/windows-x86_64/lib64/clang"
+    $clangLibDirOld = Join-Path $NdKPath "toolchains/llvm/prebuilt/windows-x86_64/lib64/clang"
+    $clangLibDirNew = Join-Path $NdKPath "toolchains/llvm/prebuilt/windows-x86_64/lib/clang"
+    $clangLibDir = if (Test-Path $clangLibDirNew) { $clangLibDirNew } else { $clangLibDirOld }
+    
     # find latest clang version directory, if it exists
     $clangVersion = $null
     if (Test-Path $clangLibDir) {
@@ -81,11 +85,13 @@ foreach ($abi in $abis) {
             if ($ompPath -and (Test-Path $ompPath)) {
                 Copy-Item -Path $ompPath -Destination $targetDir -ErrorAction SilentlyContinue
                 Write-Host "Copied libomp.so for $abi from NDK"
-            } else {
+            }
+            else {
                 Write-Warning "libomp.so not found for $abi at $ompPath"
             }
         }
-    } else {
+    }
+    else {
         Write-Warning "clang directory not found at $clangLibDir, skipping libomp copy"
     }
 
