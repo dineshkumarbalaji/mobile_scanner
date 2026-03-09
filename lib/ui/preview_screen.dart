@@ -1,11 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'dart:convert' as convert;
+import 'dart:convert';
 import '../services/ocr_service.dart';
 import '../models/document_model.dart';
 import 'package:path_provider/path_provider.dart';
 import '../repositories/document_repository.dart';
-import 'result_screen.dart';
 
 class PreviewScreen extends StatefulWidget {
   final String imagePath;

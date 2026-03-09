@@ -4,6 +4,10 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'dart:convert';
 import '../models/document_model.dart';
 import '../services/ocr_service.dart';
+import '../services/chat_service.dart';
+import '../services/query_mapper_service.dart';
+import '../services/prompt_builder_service.dart';
+import '../services/slm_service.dart';
 import 'json_viewer_screen.dart';
 
 class ChatMessage {
@@ -31,12 +35,18 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   bool _isTyping = false;
   String _jsonContext = "";
   bool _isLoadingContext = true;
+  late final ChatService _chatService;
 
   late AnimationController _dotsController;
 
   @override
   void initState() {
     super.initState();
+    _chatService = ChatService(
+      queryMapperService: QueryMapperService(),
+      promptBuilderService: PromptBuilderService(),
+      slmService: LocalSlmService(),
+    );
     _dotsController = AnimationController(
        vsync: this, 
        duration: const Duration(milliseconds: 1500)
@@ -189,7 +199,10 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     _scrollToBottom();
 
     try {
-      final answer = await widget.ocrService.askQuestion(_jsonContext, text, chatHistory: _llmHistory);
+      final answer = await _chatService.askQuestion(
+        jsonContext: _jsonContext, 
+        question: text
+      );
       debugPrint('Chat: model -> $answer');
       
       setState(() {
